@@ -211,6 +211,7 @@ let getMethodHandler = async (req, board_id = null, item_id = null, column_title
     item_id = "event" in req ? req["event"]["pulseId"] : !item_id ? null : item_id;
     column_title = "event" in req ? req["event"]["columnTitle"] : !column_title ? null : column_title;
     column_value = "event" in req && "value" in req["event"] && "label" in req["event"]["value"] ? req["event"]["value"]["label"]["text"] : !column_value ? null : column_value;
+    
 
     let getAndAddColumnData = `
         query {
