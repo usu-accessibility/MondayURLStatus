@@ -13,7 +13,7 @@ app.use(bodyParser.json()); //Handles JSON requests
 app.use(bodyParser.urlencoded({extended:true}));
 
 
-let urlDictionary = {};
+// let urlDictionary = {};
 let statusCodeArray = {};
 let count = 0;
 let actualCount = 0;
@@ -37,9 +37,6 @@ async function addOrEditValuesOfBoard(action, method, item_id = null) {
     try {
         let response = await axios.post(url, data, { headers });
         let res = response.data;
-
-        console.log("in in request");
-        console.log(res);
 
         if (method === "getData") {
             // Accumulate all items into a list
@@ -75,12 +72,13 @@ async function addOrEditValuesOfBoard(action, method, item_id = null) {
                 // Append items to the list
                 all_items = all_items.concat(res["data"]["next_items_page"]["items"]);
                 cursor = res["data"]["next_items_page"]['cursor'];
-                console.log(all_items.length);
             }
         }
 
         if (method === "getData") {
-            urlDictionary = {};
+            let urlDictionary = {};
+            console.log(urlDictionary)
+            // urlDictionary = {};
             let dataOnBoard = all_items;
             let index = dataOnBoard.findIndex(row => row['id'] === String(item_id));
             let end_index = Math.min(index + 250, dataOnBoard.length);
@@ -97,18 +95,18 @@ async function addOrEditValuesOfBoard(action, method, item_id = null) {
                         message_id = obj["id"];
                     }
                 }
-                console.log(item_data)
 
                 if (item_data) {
-                    console.log(item_data['value'])
                     urlDictionary[item_data['value'].replaceAll('"', "")] = item_id;
                 }
             }
 
-            console.log(urlDictionary);
             return [urlDictionary, res];
-        } else if (method === "addData") {
-            urlDictionary = {};
+        }
+        else if (method === "addData") {
+            let urlDictionary = {};
+            console.log(urlDictionary)
+
             let dataOnBoard = res["data"]["items"];
 
             for (let idx = 0; idx < dataOnBoard.length; idx++) {
@@ -125,8 +123,6 @@ async function addOrEditValuesOfBoard(action, method, item_id = null) {
                 }
 
                 if (item_data) {
-                    console.log(item_data)
-
                     urlDictionary[item_data['value'].replaceAll('"', '')] = item_id;
                 }
             }
@@ -151,11 +147,10 @@ app.get('/', function(req, res){
 })
 
 app.post('/main', async function(req, res){
-    console.log(req.body);
     let bodyJSON = req.body;
 
     if (bodyJSON != null && 'event' in bodyJSON) {
-        res.json(getMethodHandler(bodyJSON));
+        res.json(await getMethodHandler(bodyJSON));
     } else if (bodyJSON != null && 'challenge' in bodyJSON) {
         res.json(postMethodHandler(req));
     } else if (bodyJSON != null && 'update_board' in bodyJSON) {
@@ -173,10 +168,10 @@ app.post('/main', async function(req, res){
                 }
             }
         `;
-
+        
         try {
             let response = await addOrEditValuesOfBoard(getTitle, "columnTitle");
-            res.json(getMethodHandler(bodyJSON, bodyJSON['update_board']['boardId'], bodyJSON['update_board']['itemId'], response['column']['title'], response['text']));
+            res.json(await getMethodHandler(bodyJSON, bodyJSON['update_board']['boardId'], bodyJSON['update_board']['itemId'], response['column']['title'], response['text']));
         } catch (error) {
             console.error("Error in update_board:", error.message);
             res.json({
@@ -212,6 +207,11 @@ let getMethodHandler = async (req, board_id = null, item_id = null, column_title
     column_title = "event" in req ? req["event"]["columnTitle"] : !column_title ? null : column_title;
     column_value = "event" in req && "value" in req["event"] && "label" in req["event"]["value"] ? req["event"]["value"]["label"]["text"] : !column_value ? null : column_value;
     
+    console.log("bodyJSON")
+    console.log(board_id)
+    console.log(item_id)
+    console.log(column_title)
+    console.log(column_value)
 
     let getAndAddColumnData = `
         query {
@@ -256,7 +256,7 @@ let getMethodHandler = async (req, board_id = null, item_id = null, column_title
     if (column_title && column_value && column_title === "Redirect" && column_value === "Check Redirect") {
         try {
             let response = await addOrEditValuesOfBoard(getAndAddColumnData, "addData");
-            callApi(Object.keys(response[0]), response[1], "addData", board_id);
+            await callApi(Object.keys(response[0]), response[1], "addData", board_id, response[0]);
         } catch (error) {
             console.error("Error in Check Redirect:", error.message);
             return {
@@ -267,7 +267,7 @@ let getMethodHandler = async (req, board_id = null, item_id = null, column_title
     } else if (column_title && column_value && column_title === "Redirect" && column_value === "Check All URL's") {
         try {
             let response = await addOrEditValuesOfBoard(getBoardDataQuery, "getData", item_id);
-            callApi(Object.keys(response[0]), response[1], "getData", board_id);
+            await callApi(Object.keys(response[0]), response[1], "getData", board_id, response[0]);
         } catch (error) {
             console.error("Error in Check All URL's:", error.message);
             return {
@@ -279,13 +279,11 @@ let getMethodHandler = async (req, board_id = null, item_id = null, column_title
 };
 
 // This method checks the prefix of the url and makes call to setStatusUrl method accordingly
-let callApi = async (rowData, res, method, board_id) => {
+let callApi = async (rowData, res, method, board_id, urlDictionary) => {
     try {
         count = 0;
         actualCount = 0;
         row_length = rowData.length;
-
-        console.log(rowData);
 
         for (let idx = 0; idx < row_length; idx++) {
             let prefix = "https://www.";
@@ -297,14 +295,13 @@ let callApi = async (rowData, res, method, board_id) => {
                 continue;
             }
 
-            console.log(url)
             if (url.startsWith(prefix) || url.startsWith(prefix2)) {
-                setStatusOfUrl(url, idx + 1, rowData, res, url, method, board_id);
+                await setStatusOfUrl(url, idx + 1, rowData, res, url, method, board_id, urlDictionary);
             } else {
                 if (url.startsWith(prefix1)) {
-                    setStatusOfUrl(url, idx + 1, rowData, res, url, method, board_id);
+                    await setStatusOfUrl(url, idx + 1, rowData, res, url, method, board_id, urlDictionary);
                 } else {
-                    setStatusOfUrl("https://" + url, idx + 1, rowData, res, url, method, board_id);
+                    await setStatusOfUrl("https://" + url, idx + 1, rowData, res, url, method, board_id, urlDictionary);
                 }
             }
         }
@@ -315,12 +312,11 @@ let callApi = async (rowData, res, method, board_id) => {
 };
 
 // This method checks the status code of the URL and update the monday with details
-let setStatusOfUrl = async (url, idx, rowData, res, orgUrl, method, board_id) => {
+let setStatusOfUrl = async (url, idx, rowData, res, orgUrl, method, board_id, urlDictionary) => {
     let headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36'
     };
 
-    console.log(url)
     try {
         var status_response = await fetch(url, { 
                                         method: 'GET',
@@ -333,25 +329,35 @@ let setStatusOfUrl = async (url, idx, rowData, res, orgUrl, method, board_id) =>
                                             },
                                           }),
                                     });
-        console.log(status_response)
+
         let data = status_response.status;
         let location = status_response.headers.get('location') || null;
         let statusMessage = status_response.statusText;
-    
+
+        console.log(status_response)
+        
+        var currentDate = new Date();
+
+        // Get the current date components
+        var year = currentDate.getFullYear();
+        var month = currentDate.getMonth() + 1; // Month is zero-based, so add 1
+        var day = currentDate.getDate();
+
         if (data >= 300 && data < 310) {
             let checkLink1 = url;
             let checkLink2 = location;
     
             if (checkLink1.replaceAll('www.', '') === checkLink2.replaceAll('www.', '')) {
-                pushDataToArray(data, url, "Not changed", statusMessage, orgUrl);
-                await updateSheet([url], method, board_id);
+                pushDataToArray(data, url, `Not changed - ${month + '/' + day + '/' + year}`, statusMessage, orgUrl);
+                await updateSheet([url], method, board_id, urlDictionary);
             } else {
                 pushDataToArray(data, url, location, statusMessage, orgUrl);
-                await updateSheet([url], method, board_id);
+                console.log(statusCodeArray);
+                await updateSheet([url], method, board_id, urlDictionary);
             }
         } else {
-            pushDataToArray(data, url, "Not changed", statusMessage, orgUrl);
-            await updateSheet([url], method, board_id);
+            pushDataToArray(data, url, `Not changed - ${month + '/' + day + '/' + year}`, statusMessage, orgUrl);
+            await updateSheet([url], method, board_id, urlDictionary);
         }
     
         console.log("fetching the URL status:-", actualCount, "out of", row_length - 1, "URL status fetched");
@@ -359,10 +365,9 @@ let setStatusOfUrl = async (url, idx, rowData, res, orgUrl, method, board_id) =>
         actualCount += 1;
     } 
     catch (error) {
-        console.log("error");
         console.log(error);
-        pushDataToArray(0, url, "Not changed", "error", orgUrl);
-        await updateSheet([url], method, board_id);
+        pushDataToArray(0, url, `Not changed - ${month + '/' + day + '/' + year}`, "error", orgUrl);
+        await updateSheet([url], method, board_id, urlDictionary);
 
         console.log("fetching the URL status:-", actualCount, "out of", row_length - 1, "URL status fetched");
         count += 1;
@@ -376,7 +381,7 @@ let pushDataToArray = (data, url, link, statusMessage, orgUrl) => {
 };
 
 // This method updates the monday with redirect status and with the new url
-let updateSheet = async (rowData, method, board_id) => {
+let updateSheet = async (rowData, method, board_id, urlDictionary) => {
     try {
         finalArray = [];
 
@@ -392,14 +397,14 @@ let updateSheet = async (rowData, method, board_id) => {
             }
         }
 
-        console.log("update sheet");
-        console.log(finalArray);
-
         if (finalArray[0]) {
             let value = "";
+            console.log(urlDictionary)
+            console.log(finalArray[0][0]);
             let item_id = urlDictionary[finalArray[0][0]];
             let status = finalArray[0][3];
-            console.log(status);
+            console.log("check status")
+            console.log(status)
             if (["OK", "200", "Found", ""].includes(status.trim())) {
                 value = "Ok";
             } else if (status.trim() === "certificate has expired") {
@@ -418,11 +423,6 @@ let updateSheet = async (rowData, method, board_id) => {
                 value = "Error";
             }
 
-            console.log(value + "=========" + status);
-            console.log(finalArray[0][0]);
-
-            console.log(status_id, message_id);
-
             let column_value = {
                 [status_id]: value,
                 [message_id]: finalArray[0][2]
@@ -434,7 +434,6 @@ let updateSheet = async (rowData, method, board_id) => {
                 }
             }`;
 
-            console.log(addNewURLDataQuery);
             await addOrEditValuesOfBoard(addNewURLDataQuery, "editData");
         }
     }
