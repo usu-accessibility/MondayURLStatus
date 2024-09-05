@@ -2,7 +2,12 @@ import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { TWebhookBody } from "./types";
-import { getData, handleUpdate } from "./actions";
+import {
+  checkAndUpdateItem,
+  getAllItems,
+  getData,
+  handleUpdate,
+} from "./actions";
 
 const app = new Hono().basePath("/api");
 
@@ -44,6 +49,33 @@ app.post("/check-url", async (c) => {
     const { boardId, columnId, pulseId, data } = await getData(body);
 
     await handleUpdate(boardId, pulseId, columnId, data);
+
+    return c.json(
+      {
+        error: false,
+        message: "Successfully ran.",
+      },
+      200
+    );
+  } catch (e) {
+    console.error(e);
+    return c.json(
+      {
+        error: true,
+        message: "Something went wrong.",
+      },
+      500
+    );
+  }
+});
+
+app.post("/check-all-urls", async (c) => {
+  try {
+    const body = await c.req.json<TWebhookBody>();
+
+    const items = await getAllItems(body.event.boardId);
+
+    await Promise.all(items.map((item) => checkAndUpdateItem(body, item)));
 
     return c.json(
       {

@@ -1,4 +1,4 @@
-import fetch from "node-fetch";
+import fetch, { FetchError } from "node-fetch";
 import https from "https";
 
 import { monday } from "./monday-client";
@@ -30,6 +30,7 @@ const getUrlStatus = async (url: string) => {
         if (urlToCheck.protocol === "https")
           return new https.Agent({
             rejectUnauthorized: false,
+            timeout: 1000 * 10,
           });
       },
     });
@@ -39,6 +40,16 @@ const getUrlStatus = async (url: string) => {
       newUrl: response.headers.get("location") ?? "",
     };
   } catch (e) {
+    if (e instanceof FetchError) {
+      switch (e.code) {
+        case "CERT_HAS_EXPIRED":
+          return {
+            status: 9001,
+            newUrl: "",
+          };
+      }
+    }
+
     console.error(e);
     return {
       status: 9999,
@@ -92,10 +103,17 @@ export const handleUpdate = async (
         text488: data.newUrl,
       })
     );
-  } else if (data.status > 500 && data.status < 9999) {
+  } else if (data.status > 500 && data.status < 9000) {
     values = JSON.stringify(
       JSON.stringify({
         [columnId]: "ServiceUnavailable",
+        text488: data.newUrl,
+      })
+    );
+  } else if (data.status === 9001) {
+    values = JSON.stringify(
+      JSON.stringify({
+        [columnId]: "CertificateHasExpired",
         text488: data.newUrl,
       })
     );
@@ -119,4 +137,65 @@ export const handleUpdate = async (
       }
     }
   `);
+};
+
+export const getAllItems = async (boardId: number) => {
+  let cursor: null | string = null;
+  const items: { id: string; url?: string }[] = [];
+
+  while (true) {
+    const response = await monday.api(`
+      {
+        boards(ids: [${boardId}]) {
+          items_page(limit: 500${cursor ? `, cursor: "${cursor}"` : ""}) {
+            cursor
+            items{
+              id
+              column_values (ids: ["text4"]) {
+                text
+              }
+            }
+          }
+        }
+      }
+    `);
+
+    const data = response.data.boards[0].items_page;
+
+    items.push(
+      ...data.items.map((item) => ({
+        id: item.id,
+        url: item.column_values[0].text ?? undefined,
+      }))
+    );
+
+    if (!data.cursor) {
+      break;
+    } else {
+      cursor = data.cursor;
+    }
+  }
+
+  return items;
+};
+
+export const checkAndUpdateItem = async (
+  body: TWebhookBody,
+  item: Awaited<ReturnType<typeof getAllItems>>[0]
+) => {
+  let data = {
+    status: 404,
+    newUrl: "",
+  };
+
+  if (item.url) {
+    data = await getUrlStatus(item.url);
+  }
+
+  await handleUpdate(
+    body.event.boardId,
+    parseInt(item.id),
+    body.event.columnId,
+    data
+  );
 };
