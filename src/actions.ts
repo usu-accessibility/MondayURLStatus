@@ -25,12 +25,15 @@ const getItemUrl = async (itemId: number) => {
 const getUrlStatus = async (url: string) => {
   try {
     const response = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36",
+      },
       redirect: "manual",
       agent: (urlToCheck) => {
-        if (urlToCheck.protocol === "https")
+        if (urlToCheck.protocol === "https:")
           return new https.Agent({
             rejectUnauthorized: false,
-            timeout: 1000 * 10,
           });
       },
     });
@@ -130,16 +133,21 @@ export const handleUpdate = async (
     );
   }
 
-  await monday.api(`
+  const response = await monday.api(`
     mutation {
       change_multiple_column_values(item_id:${itemId}, board_id: ${boardId}, column_values: ${values}) {
         id
       }
     }
   `);
+
+  if ((response as any)?.status_code === 429) {
+    await new Promise((r) => setTimeout(r, 10000));
+    return handleUpdate(boardId, itemId, columnId, data);
+  }
 };
 
-export const getAllItems = async (boardId: number) => {
+export const getAllItems = async (boardId: number, groupId: string) => {
   let cursor: null | string = null;
   const items: { id: string; url?: string }[] = [];
 
@@ -147,12 +155,14 @@ export const getAllItems = async (boardId: number) => {
     const response = await monday.api(`
       {
         boards(ids: [${boardId}]) {
-          items_page(limit: 500${cursor ? `, cursor: "${cursor}"` : ""}) {
-            cursor
-            items{
-              id
-              column_values (ids: ["text4"]) {
-                text
+          groups(ids: ["${groupId}"]) {
+            items_page(limit: 500${cursor ? `, cursor: "${cursor}"` : ""}) {
+              cursor
+              items {
+                id
+                column_values (ids: ["text4"]) {
+                  text
+                }
               }
             }
           }
@@ -160,7 +170,7 @@ export const getAllItems = async (boardId: number) => {
       }
     `);
 
-    const data = response.data.boards[0].items_page;
+    const data = response.data.boards[0].groups[0].items_page;
 
     items.push(
       ...data.items.map((item) => ({

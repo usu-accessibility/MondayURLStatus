@@ -73,9 +73,11 @@ app.post("/check-all-urls", async (c) => {
   try {
     const body = await c.req.json<TWebhookBody>();
 
-    const items = await getAllItems(body.event.boardId);
+    const items = await getAllItems(body.event.boardId, body.event.groupId);
 
-    await Promise.all(items.map((item) => checkAndUpdateItem(body, item)));
+    await Promise.allSettled(
+      items.map((item) => checkAndUpdateItem(body, item))
+    );
 
     return c.json(
       {

@@ -3,5 +3,6 @@ export type TWebhookBody = {
     boardId: number;
     pulseId: number;
     columnId: string;
+    groupId: string;
   };
 };
