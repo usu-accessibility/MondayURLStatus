@@ -1,13 +1,13 @@
 import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { TWebhookBody } from "./types";
+import { TWebhookBody } from "./types.js";
 import {
   checkAndUpdateItem,
   getAllItems,
   getData,
   handleUpdate,
-} from "./actions";
+} from "./actions.js";
 
 const app = new Hono().basePath("/api");
 

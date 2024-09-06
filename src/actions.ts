@@ -1,8 +1,9 @@
-import fetch, { FetchError } from "node-fetch";
+// import nfetch, { FetchError } from "node-fetch";
+import axios from "axios";
 import https from "https";
 
-import { monday } from "./monday-client";
-import { TWebhookBody } from "./types";
+import { monday } from "./monday-client.js";
+import { TWebhookBody } from "./types.js";
 
 const getItemUrl = async (itemId: number) => {
   const response = await monday.api(`
@@ -24,35 +25,23 @@ const getItemUrl = async (itemId: number) => {
 
 const getUrlStatus = async (url: string) => {
   try {
-    const response = await fetch(url, {
+    const response = await axios.get(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36",
       },
-      redirect: "manual",
-      agent: (urlToCheck) => {
-        if (urlToCheck.protocol === "https:")
-          return new https.Agent({
-            rejectUnauthorized: false,
-          });
-      },
+      httpsAgent: new https.Agent({
+        rejectUnauthorized: false,
+      }),
+      maxRedirects: 0,
+      validateStatus: (status) => status < 500,
     });
 
     return {
       status: response.status,
-      newUrl: response.headers.get("location") ?? "",
+      newUrl: (response.headers["location"] as string) ?? "",
     };
   } catch (e) {
-    if (e instanceof FetchError) {
-      switch (e.code) {
-        case "CERT_HAS_EXPIRED":
-          return {
-            status: 9001,
-            newUrl: "",
-          };
-      }
-    }
-
     console.error(e);
     return {
       status: 9999,
@@ -143,7 +132,7 @@ export const handleUpdate = async (
 
   if ((response as any)?.status_code === 429) {
     await new Promise((r) => setTimeout(r, 10000));
-    return handleUpdate(boardId, itemId, columnId, data);
+    return void handleUpdate(boardId, itemId, columnId, data);
   }
 };
 
@@ -170,7 +159,13 @@ export const getAllItems = async (boardId: number, groupId: string) => {
       }
     `);
 
-    const data = response.data.boards[0].groups[0].items_page;
+    const data = response.data.boards[0].groups[0].items_page as {
+      cursor: null | string;
+      items: {
+        id: string;
+        column_values: { text: string }[];
+      }[];
+    };
 
     items.push(
       ...data.items.map((item) => ({
