@@ -1,4 +1,3 @@
-// import nfetch, { FetchError } from "node-fetch";
 import axios from "axios";
 import https from "https";
 
