@@ -1,15 +1,22 @@
 import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import * as fastq from "fastq";
+import type { queueAsPromised } from "fastq";
+
 import { TWebhookBody } from "./types.js";
-import {
-  checkAndUpdateItem,
-  getAllItems,
-  getData,
-  handleUpdate,
-} from "./actions.js";
+import { getAllItems } from "./actions.js";
+import { worker } from "./worker.js";
 
 const app = new Hono().basePath("/api");
+
+const q: queueAsPromised<TWebhookBody["event"]> = fastq.promise(worker, 3);
+
+q.error((error, event) => {
+  if (error) {
+    console.error(`Error processing event with data:`, event, error);
+  }
+});
 
 app.get("/", (c) => {
   return c.json(
@@ -43,59 +50,40 @@ app.use(async (c, next) => {
 });
 
 app.post("/check-url", async (c) => {
-  try {
-    const body = await c.req.json<TWebhookBody>();
+  const body = await c.req.json<TWebhookBody>();
 
-    const { boardId, columnId, pulseId, data } = await getData(body);
+  q.push(body.event);
 
-    await handleUpdate(boardId, pulseId, columnId, data);
-
-    return c.json(
-      {
-        error: false,
-        message: "Successfully ran.",
-      },
-      200
-    );
-  } catch (e) {
-    console.error(e);
-    return c.json(
-      {
-        error: true,
-        message: "Something went wrong.",
-      },
-      500
-    );
-  }
+  return c.json(
+    {
+      error: false,
+      message: "Successfully added.",
+    },
+    200
+  );
 });
 
 app.post("/check-all-urls", async (c) => {
-  try {
-    const body = await c.req.json<TWebhookBody>();
+  const body = await c.req.json<TWebhookBody>();
 
-    const items = await getAllItems(body.event.boardId, body.event.groupId);
+  const items = await getAllItems(body.event.boardId, body.event.groupId);
 
-    await Promise.allSettled(
-      items.map((item) => checkAndUpdateItem(body, item))
-    );
-
-    return c.json(
-      {
-        error: false,
-        message: "Successfully ran.",
-      },
-      200
-    );
-  } catch (e) {
-    console.error(e);
-    return c.json(
-      {
-        error: true,
-        message: "Something went wrong.",
-      },
-      500
-    );
+  for (const item of items) {
+    q.push({
+      boardId: body.event.boardId,
+      pulseId: parseInt(item.id),
+      groupId: body.event.groupId,
+      columnId: body.event.columnId,
+    });
   }
+
+  return c.json(
+    {
+      error: false,
+      message: "Successfully added.",
+    },
+    200
+  );
 });
 
 const port = process.env.PORT || "3000";

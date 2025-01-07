@@ -49,10 +49,10 @@ const getUrlStatus = async (url: string) => {
   }
 };
 
-export const getData = async (body: TWebhookBody) => {
-  const boardId = body.event.boardId;
-  const pulseId = body.event.pulseId;
-  const columnId = body.event.columnId;
+export const getData = async (event: TWebhookBody["event"]) => {
+  const boardId = event.boardId;
+  const pulseId = event.pulseId;
+  const columnId = event.columnId;
   const url = await getItemUrl(pulseId);
 
   let data = {
@@ -137,7 +137,7 @@ export const handleUpdate = async (
 
 export const getAllItems = async (boardId: number, groupId: string) => {
   let cursor: null | string = null;
-  const items: { id: string; url?: string }[] = [];
+  const items: { id: string }[] = [];
 
   while (true) {
     const response = await monday.api(`
@@ -148,9 +148,6 @@ export const getAllItems = async (boardId: number, groupId: string) => {
               cursor
               items {
                 id
-                column_values (ids: ["text4"]) {
-                  text
-                }
               }
             }
           }
@@ -162,14 +159,12 @@ export const getAllItems = async (boardId: number, groupId: string) => {
       cursor: null | string;
       items: {
         id: string;
-        column_values: { text: string }[];
       }[];
     };
 
     items.push(
       ...data.items.map((item) => ({
         id: item.id,
-        url: item.column_values[0].text ?? undefined,
       }))
     );
 
@@ -181,25 +176,4 @@ export const getAllItems = async (boardId: number, groupId: string) => {
   }
 
   return items;
-};
-
-export const checkAndUpdateItem = async (
-  body: TWebhookBody,
-  item: Awaited<ReturnType<typeof getAllItems>>[0]
-) => {
-  let data = {
-    status: 404,
-    newUrl: "",
-  };
-
-  if (item.url) {
-    data = await getUrlStatus(item.url);
-  }
-
-  await handleUpdate(
-    body.event.boardId,
-    parseInt(item.id),
-    body.event.columnId,
-    data
-  );
 };
