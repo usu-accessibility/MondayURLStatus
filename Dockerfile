@@ -34,4 +34,4 @@ COPY --from=ghcr.io/usu-accessibility/docker-tools:1 /bin/httpcheck /bin/httpche
 EXPOSE 3000
 CMD ["dist/index.js"]
 
-HEALTHCHECK --interval=5s --timeout=3s --retries=5 CMD ["/bin/httpcheck", "http://127.0.0.1:3000/api"]
+HEALTHCHECK --interval=5s --timeout=3s --retries=5 CMD ["/bin/httpcheck", "http://localhost:3000/api"]
