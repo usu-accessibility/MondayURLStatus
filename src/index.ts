@@ -24,7 +24,7 @@ app.get("/", (c) => {
       error: false,
       message: "Server running...",
     },
-    200
+    200,
   );
 });
 
@@ -44,7 +44,7 @@ app.use(async (c, next) => {
         error: true,
         message: "Something went wrong.",
       },
-      500
+      500,
     );
   }
 });
@@ -59,7 +59,7 @@ app.post("/check-url", async (c) => {
       error: false,
       message: "Successfully added.",
     },
-    200
+    200,
   );
 });
 
@@ -82,7 +82,7 @@ app.post("/check-all-urls", async (c) => {
       error: false,
       message: "Successfully added.",
     },
-    200
+    200,
   );
 });
 
