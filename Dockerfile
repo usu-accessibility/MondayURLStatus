@@ -28,7 +28,6 @@ RUN npm run build
 FROM gcr.io/distroless/nodejs${NODE_VERSION}-debian${DISTROLESS_DEBIAN_VERSION}
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=3000
 COPY --from=builder /app/dist ./dist
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=ghcr.io/usu-accessibility/docker-tools:1 /bin/httpcheck /bin/httpcheck
